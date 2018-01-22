@@ -16,12 +16,19 @@ class Block {
   
   private (set) var transactions: [Transaction] = []
   
-  var key: String {
-    return ""
+  var key: String? {
+    guard let transactionInfo = transactionsAsString() else { return nil }
+    return String(index) + previousHash + String(nonce) + transactionInfo
   }
   
   func addTransaction(_ transaction: Transaction) {
     transactions.append(transaction)
+  }
+  
+  private func transactionsAsString() -> String? {
+    guard let transactionsData = try? JSONEncoder().encode(transactions),
+      let transactionsJSONString = String(data: transactionsData, encoding: .utf8) else { return nil }
+    return transactionsJSONString
   }
 }
 
@@ -39,5 +46,3 @@ class Blockchain {
     blocks.append(block)
   }
 }
-
-
