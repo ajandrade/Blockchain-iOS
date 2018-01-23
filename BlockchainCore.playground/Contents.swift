@@ -2,6 +2,24 @@
 
 import Foundation
 
+protocol SmartContract {
+  func apply(to transaction: Transaction)
+}
+
+class SmartContractTransation: SmartContract {
+  func apply(to transaction: Transaction) {
+    var fee = 0.0
+    switch transaction.type {
+    case .domestic:
+      fee = 0.02
+    case .international:
+      fee = 0.05
+    }
+    transaction.fee = transaction.amount * fee
+    transaction.amount -= transaction.fee
+  }
+}
+
 struct HashGenerator {
   static func generateHash(for block: Block) -> String {
     var hash = block.key.sha1()
@@ -16,11 +34,23 @@ struct HashGenerator {
   }
 }
 
-struct Transaction: Codable {
+enum TransactionType: String, Codable { case domestic, international }
+
+class Transaction: Codable {
   // PROPERTIES
   var from: String
   var to: String
   var amount: Double
+  var fee: Double = 0.0
+  var type: TransactionType
+  
+  // INITIALIZER
+  init(from: String, to: String, amount: Double, type: TransactionType) {
+    self.from = from
+    self.to = to
+    self.amount = amount
+    self.type = type
+  }
   
   // FUNCTIONS
   func asString() -> String {
@@ -30,7 +60,7 @@ struct Transaction: Codable {
   }
 }
 
-class Block {
+class Block: Codable {
   // PROPERTIES
   var index: Int = 0
   var previousHash: String = ""
@@ -51,21 +81,32 @@ class Block {
   
 }
 
-class Blockchain {
+class Blockchain: Codable {
   // PROPERTIES
   private (set) var blocks: [Block] = []
+  private (set) var smartContracts: [SmartContractTransation] = [SmartContractTransation()]
   
   // INITIALIZER
   init(genesisBlock: Block) {
     addBlock(genesisBlock)
   }
   
+  private enum CodingKeys : CodingKey { case blocks }
+
   // FUNCTIONS
   func addBlock(_ block: Block) {
+    // Is genesis block?
     if blocks.isEmpty {
       block.previousHash = "0000000000000000"
       block.hash = HashGenerator.generateHash(for: block)
     }
+    // Run smart contracts
+    smartContracts.forEach { contract in
+      block.transactions.forEach { transaction in
+        contract.apply(to: transaction)
+      }
+    }
+    // Add block
     blocks.append(block)
   }
   
@@ -88,16 +129,20 @@ class Blockchain {
 
 // TESTING
 
-print("------------------------------\n -- GENESIS BLOCK -- \n------------------------------")
+print("------------------------------\n -- ADD GENESIS BLOCK -- \n------------------------------")
 let genesisBlock = Block()
 let blockchain = Blockchain(genesisBlock: genesisBlock)
 
-let transaction1 = Transaction(from: "x1", to: "x2", amount: 20)
-let transaction2 = Transaction(from: "x3", to: "x4", amount: 14)
-
-print("------------------------------\n -- BLOCK w/ TRANSACTION -- \n------------------------------")
+print("------------------------------\n -- ADD BLOCK w/ TRANSACTIONS -- \n------------------------------")
+let transaction1 = Transaction(from: "x1", to: "x2", amount: 20, type: .domestic)
+let transaction2 = Transaction(from: "x3", to: "x4", amount: 10, type: .international)
 let block = blockchain.getNextBlock(transactions: [transaction1, transaction2])
 blockchain.addBlock(block)
 print("------------------------------\n -- END -- \n------------------------------")
 print("Number of blocks: \(blockchain.blocks.count)")
+print("------------------------------\n -- BLOCKCHAIN INFO -- \n------------------------------")
+let data = try! JSONEncoder().encode(blockchain)
+let blockchainInfo = String(data: data, encoding: .utf8)
+print(blockchainInfo!)
+
 
